@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — Sentinels{% endblock %}
+{% block page_title %}LIVE DASHBOARD{% endblock %}
+
+{% block extra_head %}
+<style>
+  .stats-row {
+    display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-bottom:28px; max-width:960px;
+  }
+  .stat-card {
+    background:var(--panel2); border:1px solid var(--border);
+    padding:18px 20px;
+    clip-path:polygon(0 0,calc(100% - 12px) 0,100% 12px,100% 100%,0 100%);
+  }
+  .stat-card .s-label { font-family:'Share Tech Mono',monospace; font-size:0.65rem; letter-spacing:3px; color:var(--dim); }
+  .stat-card .s-value { font-size:2rem; font-weight:700; color:var(--accent); margin-top:4px; line-height:1; }
+  .stat-card .s-value.green { color:var(--green); }
+  .stat-card .s-value.red   { color:var(--accent2); }
+
+  .section-label {
+    font-family:'Share Tech Mono',monospace; font-size:0.72rem;
+    letter-spacing:4px; color:var(--dim); margin-bottom:14px;
+    display:flex; align-items:center; gap:10px;
+  }
+  .section-label::after { content:''; flex:1; height:1px; background:var(--border); }
+
+  .cam-grid {
+    display:grid; grid-template-columns:1fr; gap:18px; max-width:960px;
+  }
+  .cam-card {
+    background:var(--panel2); border:1px solid var(--border);
+    overflow:hidden; position:relative;
+  }
+  .cam-header {
+    display:flex; justify-content:space-between; align-items:center;
+    padding:10px 14px; border-bottom:1px solid var(--border);
+    font-family:'Share Tech Mono',monospace; font-size:0.75rem;
+  }
+  .cam-header .cam-name { color:var(--text); letter-spacing:2px; }
+  .cam-header .cam-badge {
+    background:rgba(255,68,68,0.15); border:1px solid rgba(255,68,68,0.3);
+    color:var(--accent2); font-size:0.65rem; padding:2px 8px; letter-spacing:2px;
+  }
+  .cam-badge.active { background:rgba(34,255,136,0.1); border-color:rgba(34,255,136,0.3); color:var(--green); }
+  .cam-feed {
+    width:100%; aspect-ratio:16/9;
+    background:#000; display:flex; align-items:center; justify-content:center;
+    position:relative; overflow:hidden;
+  }
+  .cam-feed img { width:100%; height:100%; object-fit:cover; }
+  .cam-feed .no-feed {
+    text-align:center; color:var(--dim);
+    font-family:'Share Tech Mono',monospace; font-size:0.75rem; letter-spacing:2px;
+  }
+  .cam-feed .no-feed .icon { font-size:2rem; margin-bottom:8px; opacity:0.4; }
+  .cam-overlay {
+    position:absolute; bottom:8px; left:8px; right:8px;
+    display:flex; justify-content:space-between;
+    font-family:'Share Tech Mono',monospace; font-size:0.65rem; color:rgba(255,255,255,0.5);
+  }
+  .cam-footer {
+    padding:8px 14px; font-size:0.72rem; color:var(--dim);
+    font-family:'Share Tech Mono',monospace; letter-spacing:1px;
+  }
+
+  .no-cameras {
+    grid-column:1/-1; text-align:center; padding:60px 20px;
+    color:var(--dim); font-family:'Share Tech Mono',monospace;
+  }
+  .no-cameras .big { font-size:3rem; margin-bottom:12px; opacity:0.3; }
+  .no-cameras p { font-size:0.8rem; letter-spacing:2px; line-height:2; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="stats-row">
+  <div class="stat-card">
+    <div class="s-label">CAMERA</div>
+    <div class="s-value">1</div>
+  </div>
+  <div class="stat-card">
+    <div class="s-label">STATUS</div>
+    <div class="s-value green">ONLINE</div>
+  </div>
+  <div class="stat-card">
+    <div class="s-label">ALERTS</div>
+    <div class="s-value red">0</div>
+  </div>
+</div>
+
+<div class="section-label">LIVE FEEDS</div>
+
+<div class="cam-grid">
+  {% if cameras %}
+    {% for cam in cameras %}
+    <div class="cam-card">
+      <div class="cam-header">
+        <span class="cam-name">CAM {{ '%02d'|format(cam.id) }} — {{ cam.name|upper }}</span>
+        <span class="cam-badge active">● LIVE</span>
+      </div>
+      <div class="cam-feed">
+        <img src="/stream/{{ cam.id }}" alt="Camera {{ cam.id }}" loading="lazy"
+             onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'"/>
+        <div class="no-feed" style="display:none; flex-direction:column; align-items:center;">
+          <div class="icon">📷</div>
+          <div>NO SIGNAL</div>
+        </div>
+        <div class="cam-overlay">
+          <span>{{ cam.location }}</span>
+          <span id="ts-{{ cam.id }}">--:--:--</span>
+        </div>
+      </div>
+      <div class="cam-footer">SRC: {{ cam.source if cam.source is string else 'LOCAL DEVICE' }}</div>
+    </div>
+    {% endfor %}
+  {% else %}
+    <div class="no-cameras">
+      <div class="big">📷</div>
+      <p>NO CAMERAS CONFIGURED<br>EDIT cameras.json TO ADD YOUR CCTV STREAMS</p>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  // Update per-camera timestamps
+  setInterval(() => {
+    document.querySelectorAll('[id^="ts-"]').forEach(el => {
+      el.textContent = new Date().toLocaleTimeString('en-GB', {hour12:false});
+    });
+  }, 1000);
+</script>
+{% endblock %}

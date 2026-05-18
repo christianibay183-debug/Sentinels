@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+*.egg-info/
+
+# Environment
+.env
+
+# Logs
+logs/*.log
+
+# CCTV footage (don't push large video files)
+cctv_footage/*
+!cctv_footage/.gitkeep
+
+# IDE
+.vscode/
+.idea/
+*.swp
