@@ -7,19 +7,18 @@ import cv2
 import glob
 import logging
 import time
+import requests as req
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "cctv-super-secret-key-change-in-prod")
 
-# ── Config ──────────────────────────────────────────────────────────────────
 CCTV_FOLDER   = os.path.join(os.path.dirname(__file__), "cctv_footage")
 LOG_FILE      = os.path.join(os.path.dirname(__file__), "logs", "access.log")
-CREDENTIALS   = {"admin": "admin123"}      # change or move to env / DB
+CREDENTIALS   = {"admin": "admin123"}
 
 os.makedirs(CCTV_FOLDER, exist_ok=True)
 os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
 
-# ── Logging setup ────────────────────────────────────────────────────────────
 logging.basicConfig(
     filename=LOG_FILE,
     level=logging.INFO,
@@ -31,7 +30,6 @@ def write_log(event: str, user: str = "anonymous", ip: str = ""):
     msg = f"USER={user} | IP={ip} | {event}"
     logger.info(msg)
 
-# ── Auth helper ──────────────────────────────────────────────────────────────
 def login_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -40,8 +38,6 @@ def login_required(f):
         return f(*args, **kwargs)
     return decorated
 
-# ── Camera registry (index → source) ────────────────────────────────────────
-# Source can be 0/1/2 (USB), rtsp:// URL, or http:// stream URL
 CAMERAS = {}
 caps    = {}
 
@@ -52,7 +48,6 @@ def get_camera_config():
             return json.load(f)
     return []
 
-# Populate CAMERAS from config
 for cam in get_camera_config():
     CAMERAS[cam["id"]] = cam["source"]
 
@@ -64,7 +59,6 @@ def generate_frames(cam_id: int):
     while True:
         success, frame = cap.read()
         if not success:
-            # send a placeholder frame
             placeholder = cv2.imencode(".jpg", cv2.UMat(480, 640, cv2.CV_8UC3).get())[1]
             yield (b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + placeholder.tobytes() + b"\r\n")
             time.sleep(1)
@@ -73,8 +67,6 @@ def generate_frames(cam_id: int):
             continue
         _, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
         yield (b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + buf.tobytes() + b"\r\n")
-
-# ── Routes ───────────────────────────────────────────────────────────────────
 
 @app.route("/")
 def index():
@@ -99,13 +91,11 @@ def login():
             error = "Invalid username or password."
     return render_template("login.html", error=error)
 
-
 @app.route("/logout")
 def logout():
     user = session.pop("user", "unknown")
     write_log("LOGOUT", user, request.remote_addr)
     return redirect(url_for("login"))
-
 
 @app.route("/dashboard")
 @login_required
@@ -113,7 +103,6 @@ def dashboard():
     cameras = get_camera_config()
     write_log("VIEW_DASHBOARD", session["user"], request.remote_addr)
     return render_template("dashboard.html", cameras=cameras, user=session["user"])
-
 
 @app.route("/stream/<int:cam_id>")
 @login_required
@@ -123,7 +112,6 @@ def stream(cam_id):
         generate_frames(cam_id),
         mimetype="multipart/x-mixed-replace; boundary=frame"
     )
-
 
 @app.route("/footage")
 @login_required
@@ -140,13 +128,11 @@ def footage():
     write_log("VIEW_FOOTAGE", session["user"], request.remote_addr)
     return render_template("footage.html", media=media, user=session["user"])
 
-
 @app.route("/footage/file/<path:filename>")
 @login_required
 def serve_footage(filename):
     write_log(f"DOWNLOAD_FOOTAGE file={filename}", session["user"], request.remote_addr)
     return send_from_directory(CCTV_FOLDER, filename)
-
 
 @app.route("/logs")
 @login_required
@@ -154,17 +140,15 @@ def logs():
     lines = []
     if os.path.exists(LOG_FILE):
         with open(LOG_FILE) as f:
-            lines = f.readlines()[-200:]   # last 200 lines
+            lines = f.readlines()[-200:]
     lines = [l.strip() for l in reversed(lines)]
     write_log("VIEW_LOGS", session["user"], request.remote_addr)
     return render_template("logs.html", lines=lines, user=session["user"])
-
 
 @app.route("/api/cameras")
 @login_required
 def api_cameras():
     return jsonify(get_camera_config())
-
 
 @app.route("/api/logs")
 @login_required
@@ -174,9 +158,6 @@ def api_logs():
         with open(LOG_FILE) as f:
             lines = [l.strip() for l in f.readlines()[-100:]]
     return jsonify({"logs": list(reversed(lines))})
-
-# ── Proxy to ngrok ───────────────────────────────────────────────────────────
-import requests as req
 
 @app.route("/proxy", defaults={"path": ""})
 @app.route("/proxy/<path:path>", methods=["GET", "POST"])
@@ -193,12 +174,10 @@ def proxy(path):
         stream=True
     )
     return Response(r.iter_content(chunk_size=1024), status=r.status_code, content_type=r.headers.get("Content-Type"))
-    
-# ── Health check (for Railway) ───────────────────────────────────────────────
+
 @app.route("/health")
 def health():
     return jsonify({"status": "ok", "time": datetime.utcnow().isoformat()})
-
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
