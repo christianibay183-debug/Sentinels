@@ -3,3 +3,4 @@ numpy<2
 opencv-python-headless==4.9.0.80
 gunicorn==22.0.0
 python-dotenv==1.0.1
+requests0
