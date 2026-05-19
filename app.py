@@ -78,9 +78,9 @@ def index():
         return redirect(url_for("dashboard"))
     return redirect(url_for("login"))
 
-
 @app.route("/login", methods=["GET", "POST"])
 def login():
+    session.clear()
     error = None
     if request.method == "POST":
         username = request.form.get("username", "").strip()
