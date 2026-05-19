@@ -186,6 +186,7 @@ def proxy(path):
     r = req.request(
         method=request.method,
         url=url,
+        headers={**{k: v for k, v in request.headers if k != "Host"}, "ngrok-skip-browser-warning": "true"},
         headers={k: v for k, v in request.headers if k != "Host"},
         data=request.get_data(),
         cookies=request.cookies,
