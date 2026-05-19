@@ -52,6 +52,10 @@ def get_camera_config():
             return json.load(f)
     return []
 
+# Populate CAMERAS from config
+for cam in get_camera_config():
+    CAMERAS[cam["id"]] = cam["source"]
+
 def generate_frames(cam_id: int):
     src = CAMERAS.get(cam_id, cam_id)
     if cam_id not in caps or not caps[cam_id].isOpened():
