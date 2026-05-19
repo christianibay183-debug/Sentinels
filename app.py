@@ -175,7 +175,25 @@ def api_logs():
             lines = [l.strip() for l in f.readlines()[-100:]]
     return jsonify({"logs": list(reversed(lines))})
 
+# ── Proxy to ngrok ───────────────────────────────────────────────────────────
+import requests as req
 
+@app.route("/proxy", defaults={"path": ""})
+@app.route("/proxy/<path:path>", methods=["GET", "POST"])
+def proxy(path):
+    ngrok = os.environ.get("NGROK_URL", "")
+    url = f"{ngrok}/{path}"
+    r = req.request(
+        method=request.method,
+        url=url,
+        headers={k: v for k, v in request.headers if k != "Host"},
+        data=request.get_data(),
+        cookies=request.cookies,
+        allow_redirects=False,
+        stream=True
+    )
+    return Response(r.iter_content(chunk_size=1024), status=r.status_code, content_type=r.headers.get("Content-Type"))
+    
 # ── Health check (for Railway) ───────────────────────────────────────────────
 @app.route("/health")
 def health():
