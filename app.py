@@ -163,17 +163,23 @@ def api_logs():
 @app.route("/proxy/<path:path>", methods=["GET", "POST"])
 def proxy(path):
     ngrok = os.environ.get("NGROK_URL", "")
+    if not ngrok:
+        return jsonify({"error": "NGROK_URL not set"}), 500
     url = f"{ngrok}/{path}"
-    r = req.request(
-        method=request.method,
-        url=url,
-        headers={**{k: v for k, v in request.headers if k != "Host"}, "ngrok-skip-browser-warning": "true"},
-        data=request.get_data(),
-        cookies=request.cookies,
-        allow_redirects=False,
-        stream=True
-    )
-    return Response(r.iter_content(chunk_size=1024), status=r.status_code, content_type=r.headers.get("Content-Type"))
+    try:
+        r = req.request(
+            method=request.method,
+            url=url,
+            headers={**{k: v for k, v in request.headers if k != "Host"}, "ngrok-skip-browser-warning": "true"},
+            data=request.get_data(),
+            cookies=request.cookies,
+            allow_redirects=False,
+            stream=True,
+            timeout=10
+        )
+        return Response(r.iter_content(chunk_size=1024), status=r.status_code, content_type=r.headers.get("Content-Type"))
+    except Exception as e:
+        return jsonify({"error": str(e)}), 502
 
 @app.route("/health")
 def health():
