@@ -17,8 +17,13 @@ __import__('logging').getLogger('werkzeug').disabled = True
 limiter = Limiter(get_remote_address, app=app, default_limits=["200 per day", "50 per hour"])
 CCTV_FOLDER   = os.path.join(os.path.dirname(__file__), "cctv_footage")
 LOG_FILE      = os.path.join(os.path.dirname(__file__), "logs", "access.log")
-CREDENTIALS   = {"admin": "admin123"}
-
+CREDENTIALS = {
+    os.environ.get("ADMIN_USER", "admin"): os.environ.get("ADMIN_PASS", "admin123"),
+    "Jaylee": "jaylee123",
+    "Jona": "jona123",
+    "Cayenne": "cayenne123",
+    "Lensy": "lensy123",
+}`
 os.makedirs(CCTV_FOLDER, exist_ok=True)
 os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
 
@@ -199,7 +204,7 @@ def serve_footage(filename):
 @app.route("/logs")
 @login_required
 def logs():
-    if session.get("user") != os.environ.get("ADMIN_USER", "admin"):
+  if session.get("user") != "admin":
         return redirect(url_for("dashboard"))
         
     lines = []
