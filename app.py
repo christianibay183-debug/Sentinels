@@ -204,9 +204,8 @@ def serve_footage(filename):
 @app.route("/logs")
 @login_required
 def logs():
-  if session.get("user") != "admin":
+    if session.get("user") != "admin":
         return redirect(url_for("dashboard"))
-        
     lines = []
     if os.path.exists(LOG_FILE):
         with open(LOG_FILE) as f:
