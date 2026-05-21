@@ -26,7 +26,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger("cctv")
 
-# Also log to console so you can see errors in the terminal
 console_handler = logging.StreamHandler()
 console_handler.setLevel(logging.ERROR)
 logger.addHandler(console_handler)
@@ -57,18 +56,16 @@ def get_camera_config():
             return json.load(f)
     return []
 
+
 for cam in get_camera_config():
     CAMERAS[cam["id"]] = cam["source"]
 
-os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp"  # ← keep this line here
-
-def generate_frames(cam_id: int):   # ← line 67 becomes line 65
+os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp"
 
 
 def generate_frames(cam_id: int):
     src = CAMERAS.get(cam_id, cam_id)
 
-    # Use substream (subtype=1) if it's an RTSP URL for lower latency
     if isinstance(src, str) and "subtype=0" in src:
         src = src.replace("subtype=0", "subtype=1")
 
@@ -92,7 +89,7 @@ def generate_frames(cam_id: int):
                     consecutive_failures += 1
                     if consecutive_failures >= 5:
                         logger.error(f"Too many failures on cam={cam_id}, reconnecting...")
-                        break  # reconnect outer loop
+                        break
                     time.sleep(0.5)
                     continue
 
@@ -107,7 +104,6 @@ def generate_frames(cam_id: int):
                     continue
 
         except GeneratorExit:
-            # Client disconnected cleanly — stop streaming
             logger.info(f"Client disconnected from cam={cam_id}")
             break
 
@@ -120,7 +116,7 @@ def generate_frames(cam_id: int):
                 if cam_id in caps:
                     del caps[cam_id]
 
-        time.sleep(2)  # Wait before reconnecting
+        time.sleep(2)
 
 
 @app.route("/")
