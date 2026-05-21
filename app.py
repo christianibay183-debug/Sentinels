@@ -57,9 +57,12 @@ def get_camera_config():
             return json.load(f)
     return []
 
-
 for cam in get_camera_config():
     CAMERAS[cam["id"]] = cam["source"]
+
+os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp"  # ← keep this line here
+
+def generate_frames(cam_id: int):   # ← line 67 becomes line 65
 
 
 def generate_frames(cam_id: int):
