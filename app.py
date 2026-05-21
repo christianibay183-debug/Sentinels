@@ -8,11 +8,13 @@ import glob
 import logging
 import time
 import requests as req
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
 app = Flask(__name__, template_folder="templates", static_folder="Frontend", static_url_path="")
 app.secret_key = os.environ.get("SECRET_KEY", "cctv-super-secret-key-change-in-prod")
 __import__('logging').getLogger('werkzeug').disabled = True
-
+limiter = Limiter(get_remote_address, app=app, default_limits=["200 per day", "50 per hour"])
 CCTV_FOLDER   = os.path.join(os.path.dirname(__file__), "cctv_footage")
 LOG_FILE      = os.path.join(os.path.dirname(__file__), "logs", "access.log")
 CREDENTIALS   = {"admin": "admin123"}
@@ -128,6 +130,7 @@ def index():
 
 
 @app.route("/login", methods=["GET", "POST"])
+@limiter.limit("5 per minute")
 def login():
     session.clear()
     error = None
