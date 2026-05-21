@@ -23,9 +23,10 @@ CREDENTIALS = {
     "Jona": "jona123",
     "Cayenne": "cayenne123",
     "Lensy": "lensy123",
+}
 os.makedirs(CCTV_FOLDER, exist_ok=True)
 os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
-}
+
 logging.basicConfig(
     filename=LOG_FILE,
     level=logging.INFO,
