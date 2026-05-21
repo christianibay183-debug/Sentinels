@@ -26,9 +26,16 @@ logging.basicConfig(
 )
 logger = logging.getLogger("cctv")
 
+# Also log to console so you can see errors in the terminal
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.ERROR)
+logger.addHandler(console_handler)
+
+
 def write_log(event: str, user: str = "anonymous", ip: str = ""):
     msg = f"USER={user} | IP={ip} | {event}"
     logger.info(msg)
+
 
 def login_required(f):
     @wraps(f)
@@ -38,8 +45,10 @@ def login_required(f):
         return f(*args, **kwargs)
     return decorated
 
+
 CAMERAS = {}
 caps    = {}
+
 
 def get_camera_config():
     cfg_path = os.path.join(os.path.dirname(__file__), "cameras.json")
@@ -48,32 +57,75 @@ def get_camera_config():
             return json.load(f)
     return []
 
+
 for cam in get_camera_config():
     CAMERAS[cam["id"]] = cam["source"]
+
+
 def generate_frames(cam_id: int):
     src = CAMERAS.get(cam_id, cam_id)
-    if cam_id not in caps or not caps[cam_id].isOpened():
-        caps[cam_id] = cv2.VideoCapture(src)
-    cap = caps[cam_id]
-    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+
+    # Use substream (subtype=1) if it's an RTSP URL for lower latency
+    if isinstance(src, str) and "subtype=0" in src:
+        src = src.replace("subtype=0", "subtype=1")
+
     while True:
-        success, frame = cap.read()
-        if not success:
-            placeholder = cv2.imencode(".jpg", cv2.UMat(480, 640, cv2.CV_8UC3).get())[1]
-            yield (b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + placeholder.tobytes() + b"\r\n")
-            time.sleep(1)
+        cap = None
+        try:
             cap = cv2.VideoCapture(src)
-            caps[cam_id] = cap
-            continue
-        frame = cv2.resize(frame, (640, 480))
-        _, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 40])
-        yield (b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + buf.tobytes() + b"\r\n")
+            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+
+            if not cap.isOpened():
+                logger.error(f"Cannot open stream cam={cam_id}, retrying in 3s...")
+                time.sleep(3)
+                continue
+
+            consecutive_failures = 0
+
+            while True:
+                success, frame = cap.read()
+
+                if not success:
+                    consecutive_failures += 1
+                    if consecutive_failures >= 5:
+                        logger.error(f"Too many failures on cam={cam_id}, reconnecting...")
+                        break  # reconnect outer loop
+                    time.sleep(0.5)
+                    continue
+
+                consecutive_failures = 0
+
+                try:
+                    frame = cv2.resize(frame, (640, 480))
+                    _, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 40])
+                    yield (b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + buf.tobytes() + b"\r\n")
+                except Exception as encode_err:
+                    logger.error(f"Frame encode error cam={cam_id}: {encode_err}")
+                    continue
+
+        except GeneratorExit:
+            # Client disconnected cleanly — stop streaming
+            logger.info(f"Client disconnected from cam={cam_id}")
+            break
+
+        except Exception as e:
+            logger.error(f"Stream error cam={cam_id}: {e}")
+
+        finally:
+            if cap is not None:
+                cap.release()
+                if cam_id in caps:
+                    del caps[cam_id]
+
+        time.sleep(2)  # Wait before reconnecting
+
 
 @app.route("/")
 def index():
     if "user" in session:
         return redirect(url_for("dashboard"))
     return redirect(url_for("login"))
+
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
@@ -92,11 +144,13 @@ def login():
             error = "Invalid username or password."
     return render_template("login.html", error=error)
 
+
 @app.route("/logout")
 def logout():
     user = session.pop("user", "unknown")
     write_log("LOGOUT", user, request.remote_addr)
     return redirect(url_for("login"))
+
 
 @app.route("/dashboard")
 @login_required
@@ -104,6 +158,7 @@ def dashboard():
     cameras = get_camera_config()
     write_log("VIEW_DASHBOARD", session["user"], request.remote_addr)
     return render_template("dashboard.html", cameras=cameras, user=session["user"])
+
 
 @app.route("/stream/<int:cam_id>")
 @login_required
@@ -114,6 +169,7 @@ def stream(cam_id):
         mimetype="multipart/x-mixed-replace; boundary=frame"
     )
 
+
 @app.route("/footage")
 @login_required
 def footage():
@@ -121,19 +177,21 @@ def footage():
     media = []
     for f in files:
         if os.path.isfile(f):
-            rel  = os.path.relpath(f, CCTV_FOLDER)
-            size = os.path.getsize(f)
+            rel   = os.path.relpath(f, CCTV_FOLDER)
+            size  = os.path.getsize(f)
             mtime = datetime.fromtimestamp(os.path.getmtime(f)).strftime("%Y-%m-%d %H:%M:%S")
-            ext  = os.path.splitext(f)[1].lower()
+            ext   = os.path.splitext(f)[1].lower()
             media.append({"name": rel, "size": size, "modified": mtime, "ext": ext})
     write_log("VIEW_FOOTAGE", session["user"], request.remote_addr)
     return render_template("footage.html", media=media, user=session["user"])
+
 
 @app.route("/footage/file/<path:filename>")
 @login_required
 def serve_footage(filename):
     write_log(f"DOWNLOAD_FOOTAGE file={filename}", session["user"], request.remote_addr)
     return send_from_directory(CCTV_FOLDER, filename)
+
 
 @app.route("/logs")
 @login_required
@@ -146,10 +204,12 @@ def logs():
     write_log("VIEW_LOGS", session["user"], request.remote_addr)
     return render_template("logs.html", lines=lines, user=session["user"])
 
+
 @app.route("/api/cameras")
 @login_required
 def api_cameras():
     return jsonify(get_camera_config())
+
 
 @app.route("/api/logs")
 @login_required
@@ -159,6 +219,7 @@ def api_logs():
         with open(LOG_FILE) as f:
             lines = [l.strip() for l in f.readlines()[-100:]]
     return jsonify({"logs": list(reversed(lines))})
+
 
 @app.route("/proxy", defaults={"path": ""})
 @app.route("/proxy/<path:path>", methods=["GET", "POST"])
@@ -182,10 +243,12 @@ def proxy(path):
     except Exception as e:
         return jsonify({"error": str(e)}), 502
 
+
 @app.route("/health")
 def health():
     return jsonify({"status": "ok", "time": datetime.utcnow().isoformat()})
 
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=False)
+    app.run(host="0.0.0.0", port=port, debug=False, threaded=True)
