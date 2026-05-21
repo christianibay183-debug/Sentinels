@@ -50,12 +50,12 @@ def get_camera_config():
 
 for cam in get_camera_config():
     CAMERAS[cam["id"]] = cam["source"]
-
 def generate_frames(cam_id: int):
     src = CAMERAS.get(cam_id, cam_id)
     if cam_id not in caps or not caps[cam_id].isOpened():
         caps[cam_id] = cv2.VideoCapture(src)
     cap = caps[cam_id]
+    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
     while True:
         success, frame = cap.read()
         if not success:
@@ -65,7 +65,8 @@ def generate_frames(cam_id: int):
             cap = cv2.VideoCapture(src)
             caps[cam_id] = cap
             continue
-        _, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
+        frame = cv2.resize(frame, (640, 480))
+        _, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 40])
         yield (b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + buf.tobytes() + b"\r\n")
 
 @app.route("/")
