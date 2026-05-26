@@ -3,7 +3,6 @@ from functools import wraps
 from datetime import datetime
 import os
 import json
-import cv2
 import glob
 import logging
 import time
@@ -67,8 +66,6 @@ def get_camera_config():
 
 for cam in get_camera_config():
     CAMERAS[cam["id"]] = cam["source"]
-
-os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp"
 
 
 def generate_frames(cam_id: int):
