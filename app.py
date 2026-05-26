@@ -74,57 +74,26 @@ os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp"
 def generate_frames(cam_id: int):
     src = CAMERAS.get(cam_id, cam_id)
 
-    if isinstance(src, str) and "subtype=0" in src:
-        src = src.replace("subtype=0", "subtype=1")
-
     while True:
-        cap = None
         try:
-            cap = cv2.VideoCapture(src)
-            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-
-            if not cap.isOpened():
-                logger.error(f"Cannot open stream cam={cam_id}, retrying in 3s...")
-                time.sleep(3)
-                continue
-
-            consecutive_failures = 0
-
-            while True:
-                success, frame = cap.read()
-
-                if not success:
-                    consecutive_failures += 1
-                    if consecutive_failures >= 5:
-                        logger.error(f"Too many failures on cam={cam_id}, reconnecting...")
-                        break
-                    time.sleep(0.5)
-                    continue
-
-                consecutive_failures = 0
-
-                try:
-                    frame = cv2.resize(frame, (640, 480))
-                    _, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 40])
-                    yield (b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + buf.tobytes() + b"\r\n")
-                except Exception as encode_err:
-                    logger.error(f"Frame encode error cam={cam_id}: {encode_err}")
-                    continue
-
+            r = req.get(src, stream=True, timeout=10)
+            bytes_buf = b""
+            for chunk in r.iter_content(chunk_size=1024):
+                bytes_buf += chunk
+                start = bytes_buf.find(b'\xff\xd8')
+                end = bytes_buf.find(b'\xff\xd9')
+                if start != -1 and end != -1:
+                    frame = bytes_buf[start:end+2]
+                    bytes_buf = bytes_buf[end+2:]
+                    yield (b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + frame + b"\r\n")
         except GeneratorExit:
-            logger.info(f"Client disconnected from cam={cam_id}")
             break
-
         except Exception as e:
             logger.error(f"Stream error cam={cam_id}: {e}")
+            time.sleep(3)
+            continue
 
-        finally:
-            if cap is not None:
-                cap.release()
-                if cam_id in caps:
-                    del caps[cam_id]
-
-        time.sleep(2)
+        
 
 
 @app.route("/")
