@@ -2,7 +2,7 @@
   {
     "id": 0,
     "name": "Main Camera",
-    "source": "rtsp://admin:admin123@192.168.1.10:554/cam/realmonitor?channel=1&subtype=0",
+    "source": https://soldier-shirts-interviews-marcus.trycloudflare.com/camera/  
     "location": "Main Area"
   }
 ]
