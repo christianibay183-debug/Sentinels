@@ -63,10 +63,8 @@ def get_camera_config():
             return json.load(f)
     return []
 
-
-for cam in get_camera_config():
-    CAMERAS[cam["id"]] = cam["source"]
-
+def get_cameras():
+    return {cam["id"]: cam["source"] for cam in get_camera_config()}
 
 def generate_frames(cam_id: int):
     src = CAMERAS.get(cam_id, cam_id)
