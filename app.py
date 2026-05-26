@@ -65,9 +65,9 @@ def get_camera_config():
 
 def get_cameras():
     return {cam["id"]: cam["source"] for cam in get_camera_config()}
-
+    
 def generate_frames(cam_id: int):
-    src = CAMERAS.get(cam_id, cam_id)
+    src = get_cameras().get(cam_id, cam_id)
 
     while True:
         try:
