@@ -14,7 +14,6 @@ from dotenv import load_dotenv
 import psycopg2
 from werkzeug.security import check_password_hash
 
-# Load environment variables from the local .env file
 load_dotenv()
 
 app = Flask(__name__)
@@ -28,6 +27,12 @@ os.makedirs(CCTV_FOLDER, exist_ok=True)
 os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
 
 def get_db_connection():
+    # Check if a unified database URL string is provided (e.g., Neon or Railway)
+    db_url = os.getenv("DATABASE_URL")
+    if db_url:
+        return psycopg2.connect(db_url)
+        
+    # Fallback to individual local parameters if DATABASE_URL isn't set
     return psycopg2.connect(
         host=os.getenv("DB_HOST"),
         database=os.getenv("DB_NAME"),
@@ -105,7 +110,7 @@ def login():
         try:
             conn = get_db_connection()
             cur = conn.cursor()
-            # Query the user_credentials table setup in pgAdmin
+            # Query the user_credentials table setup in pgAdmin / Neon
             cur.execute("SELECT password_hash FROM user_credentials WHERE username = %s;", (username,))
             user_record = cur.fetchone()
             cur.close()
