@@ -9,15 +9,32 @@ import logging
 import time
 import requests as req
 
+# Security and Database dependencies
+from dotenv import load_dotenv
+import psycopg2
+from werkzeug.security import check_password_hash
+
+# Load environment variables from the local .env file
+load_dotenv()
+
 app = Flask(__name__)
-app.secret_key = os.environ.get("SECRET_KEY", "cctv-super-secret-key-change-in-prod")
+
+app.secret_key = os.getenv("SECRET_KEY", "fallback-secret-key-for-local-dev")
 
 CCTV_FOLDER   = os.path.join(os.path.dirname(__file__), "cctv_footage")
 LOG_FILE      = os.path.join(os.path.dirname(__file__), "logs", "access.log")
-CREDENTIALS   = {"admin": "admin123"}
 
 os.makedirs(CCTV_FOLDER, exist_ok=True)
 os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
+
+def get_db_connection():
+    return psycopg2.connect(
+        host=os.getenv("DB_HOST"),
+        database=os.getenv("DB_NAME"),
+        user=os.getenv("DB_USER"),
+        password=os.getenv("DB_PASSWORD"),
+        port=os.getenv("DB_PORT", 5432)
+    )
 
 logging.basicConfig(
     filename=LOG_FILE,
@@ -44,7 +61,7 @@ caps    = {}
 def get_camera_config():
     cfg_path = os.path.join(os.path.dirname(__file__), "cameras.json")
     if os.path.exists(cfg_path):
-        with open(cfg_path) as f:
+        with open(cfg_path, "r") as f:
             return json.load(f)
     return []
 
@@ -74,6 +91,7 @@ def index():
         return redirect(url_for("dashboard"))
     return redirect(url_for("login"))
 
+# Secured Login Route targeting your user_credentials table
 @app.route("/login", methods=["GET", "POST"])
 def login():
     session.clear()
@@ -82,13 +100,29 @@ def login():
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
         ip = request.remote_addr
-        if CREDENTIALS.get(username) == password:
+        
+        user_record = None
+        try:
+            conn = get_db_connection()
+            cur = conn.cursor()
+            # Query the user_credentials table setup in pgAdmin
+            cur.execute("SELECT password_hash FROM user_credentials WHERE username = %s;", (username,))
+            user_record = cur.fetchone()
+            cur.close()
+            conn.close()
+        except Exception as e:
+            logger.error(f"Database error during login: {e}")
+            error = "Database connection issue."
+        
+        # Verify hash match safely without exposing plain-text credentials
+        if user_record and check_password_hash(user_record[0], password):
             session["user"] = username
             write_log("LOGIN_SUCCESS", username, ip)
             return redirect(url_for("dashboard"))
         else:
             write_log("LOGIN_FAILED", username, ip)
             error = "Invalid username or password."
+            
     return render_template("login.html", error=error)
 
 @app.route("/logout")
@@ -139,7 +173,7 @@ def serve_footage(filename):
 def logs():
     lines = []
     if os.path.exists(LOG_FILE):
-        with open(LOG_FILE) as f:
+        with open(LOG_FILE, "r") as f:
             lines = f.readlines()[-200:]
     lines = [l.strip() for l in reversed(lines)]
     write_log("VIEW_LOGS", session["user"], request.remote_addr)
@@ -155,14 +189,14 @@ def api_cameras():
 def api_logs():
     lines = []
     if os.path.exists(LOG_FILE):
-        with open(LOG_FILE) as f:
+        with open(LOG_FILE, "r") as f:
             lines = [l.strip() for l in f.readlines()[-100:]]
     return jsonify({"logs": list(reversed(lines))})
 
 @app.route("/proxy", defaults={"path": ""})
 @app.route("/proxy/<path:path>", methods=["GET", "POST"])
 def proxy(path):
-    ngrok = os.environ.get("NGROK_URL", "")
+    ngrok = os.getenv("NGROK_URL", "")
     if not ngrok:
         return jsonify({"error": "NGROK_URL not set"}), 500
     url = f"{ngrok}/{path}"
@@ -170,7 +204,7 @@ def proxy(path):
         r = req.request(
             method=request.method,
             url=url,
-            headers={**{k: v for k, v in request.headers if k != "Host"}, "ngrok-skip-browser-warning": "true"},
+            headers={**{k: v for k, v in request.headers.items() if k != "Host"}, "ngrok-skip-browser-warning": "true"},
             data=request.get_data(),
             cookies=request.cookies,
             allow_redirects=False,
@@ -186,5 +220,5 @@ def health():
     return jsonify({"status": "ok", "time": datetime.utcnow().isoformat()})
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
+    port = int(os.getenv("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=False)
