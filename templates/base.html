@@ -148,5 +148,28 @@
   tick(); setInterval(tick,1000);
 </script>
 {% block extra_scripts %}{% endblock %}
+<script>
+        let idleTime = 0;
+        const timeoutLimit = 15; 
+
+        const idleInterval = setInterval(timerIncrement, 60000); 
+
+        document.addEventListener('mousemove', resetTimer);
+        document.addEventListener('keypress', resetTimer);
+        document.addEventListener('click', resetTimer);
+        document.addEventListener('scroll', resetTimer);
+
+        function timerIncrement() {
+            idleTime++;
+            if (idleTime >= timeoutLimit) {
+                alert("Your session has expired due to inactivity. For your security, you have been logged out.");
+                window.location.href = '/logout'; 
+            }
+        }
+
+        function resetTimer() {
+            idleTime = 0;
+        }
+    </script>
 </body>
 </html>

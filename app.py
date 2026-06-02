@@ -1,6 +1,6 @@
 from flask import Flask, render_template, request, redirect, url_for, session, Response, jsonify, send_from_directory
 from functools import wraps
-from datetime import datetime
+from datetime import datetime, timedelta
 import os
 import json
 import glob
@@ -12,6 +12,7 @@ from flask_limiter.util import get_remote_address
 
 app = Flask(__name__, template_folder="templates", static_folder="Frontend", static_url_path="")
 app.secret_key = os.environ.get("SECRET_KEY", "cctv-super-secret-key-change-in-prod")
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=15)
 __import__('logging').getLogger('werkzeug').disabled = True
 limiter = Limiter(get_remote_address, app=app, default_limits=["200 per day", "50 per hour"])
 CCTV_FOLDER   = os.path.join(os.path.dirname(__file__), "cctv_footage")
@@ -222,6 +223,16 @@ def proxy(path):
 def health():
     return jsonify({"status": "ok", "time": datetime.utcnow().isoformat()})
 
+@app.after_request
+def add_security_headers(response):
+    csp = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data:;"
+    )
+    response.headers['Content-Security-Policy'] = csp
+    return response
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
